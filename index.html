@@ -8,6 +8,7 @@
         :root {
             --primary-color: #2c3e50;
             --secondary-color: #3498db;
+            --accent-color: #e67e22;
             --background-color: #ecf0f1;
             --card-bg: #ffffff;
             --text-color: #333333;
@@ -29,17 +30,26 @@
         h1 {
             color: var(--primary-color);
             margin-bottom: 20px;
+            text-align: center;
         }
 
         .controls {
             display: flex;
             gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .settings-controls {
+            display: flex;
+            gap: 15px;
             margin-bottom: 30px;
             flex-wrap: wrap;
             justify-content: center;
         }
 
-        .filter-btn {
+        .filter-btn, .action-btn {
             background-color: transparent;
             border: 2px solid var(--secondary-color);
             color: var(--secondary-color);
@@ -50,8 +60,18 @@
             transition: all 0.3s ease;
         }
 
+        .action-btn {
+            border-color: var(--accent-color);
+            color: var(--accent-color);
+        }
+
         .filter-btn.active, .filter-btn:hover {
             background-color: var(--secondary-color);
+            color: white;
+        }
+
+        .action-btn:hover {
+            background-color: var(--accent-color);
             color: white;
         }
 
@@ -88,25 +108,27 @@
             justify-content: center;
             align-items: center;
             border-radius: 15px;
-            background-color: var(--card-bg);
             padding: 20px;
             box-sizing: border-box;
             text-align: center;
         }
 
         .card-front {
+            background-color: var(--card-bg);
             color: var(--primary-color);
-        }
-
-        .card-front h2 {
-            font-size: 2.5rem;
-            margin: 0;
         }
 
         .card-back {
             transform: rotateY(180deg);
             background-color: var(--primary-color);
             color: white;
+        }
+
+        /* 針對文字的樣式 */
+        .word-title {
+            font-size: 2.5rem;
+            margin: 0;
+            font-weight: bold;
         }
 
         .pos-badge {
@@ -118,11 +140,13 @@
             margin-bottom: 15px;
             text-transform: uppercase;
             letter-spacing: 1px;
+            display: inline-block;
         }
 
-        .definition {
+        .definition-text {
             font-size: 1.2rem;
             line-height: 1.5;
+            margin: 0;
         }
 
         .nav-controls {
@@ -156,6 +180,8 @@
             font-size: 1.1rem;
             font-weight: bold;
             color: var(--primary-color);
+            min-width: 60px;
+            text-align: center;
         }
 
         .flip-hint {
@@ -177,15 +203,17 @@
         <button class="filter-btn" data-week="4">Week 4</button>
     </div>
 
+    <div class="settings-controls">
+        <button class="action-btn" id="shuffle-btn" onclick="shuffleCards()">🔀 隨機打亂 (Shuffle)</button>
+        <button class="action-btn" id="reverse-btn" onclick="toggleReverseMode()">🔄 看定義猜單字 (Definition First)</button>
+    </div>
+
     <div class="flashcard-container" onclick="toggleFlip()">
         <div class="flashcard" id="flashcard">
-            <div class="card-face card-front">
-                <h2 id="word-display">Word</h2>
-            </div>
-            <div class="card-face card-back">
-                <span class="pos-badge" id="pos-display">Part of Speech</span>
-                <p class="definition" id="def-display">Definition goes here</p>
-            </div>
+            <div class="card-face card-front" id="card-front-content">
+                </div>
+            <div class="card-face card-back" id="card-back-content">
+                </div>
         </div>
     </div>
 
@@ -198,7 +226,7 @@
     <div class="flip-hint">💡 點擊卡片翻面查看答案</div>
 
     <script>
-        // 匯入完整單字資料 (擷取 A:週數, B:單字, D:詞性, E:英文定義)
+        // 匯入完整單字資料 (A:週數, B:單字, D:詞性, E:英文定義)
         const vocabData = [
             // Week 1
             {week: "1", word: "conjecture", pos: "noun/verb", def: "an opinion or conclusion based on incomplete evidence"},
@@ -387,16 +415,17 @@
 
         let currentData = [...vocabData];
         let currentIndex = 0;
+        let isReverseMode = false; // 控制是否「反面在先」
 
         // DOM 元素
-        const wordDisplay = document.getElementById('word-display');
-        const posDisplay = document.getElementById('pos-display');
-        const defDisplay = document.getElementById('def-display');
+        const cardFront = document.getElementById('card-front-content');
+        const cardBack = document.getElementById('card-back-content');
         const progressDisplay = document.getElementById('progress-display');
         const flashcard = document.getElementById('flashcard');
         const prevBtn = document.getElementById('prev-btn');
         const nextBtn = document.getElementById('next-btn');
         const filterBtns = document.querySelectorAll('.filter-btn');
+        const reverseBtn = document.getElementById('reverse-btn');
 
         // 初始化
         function init() {
@@ -405,11 +434,9 @@
             // 綁定篩選按鈕事件
             filterBtns.forEach(btn => {
                 btn.addEventListener('click', (e) => {
-                    // 更新按鈕樣式
                     filterBtns.forEach(b => b.classList.remove('active'));
                     e.target.classList.add('active');
                     
-                    // 篩選資料
                     const selectedWeek = e.target.getAttribute('data-week');
                     if (selectedWeek === 'All') {
                         currentData = [...vocabData];
@@ -418,30 +445,43 @@
                     }
                     
                     currentIndex = 0;
-                    if(flashcard.classList.contains('flipped')) {
-                        flashcard.classList.remove('flipped');
-                        setTimeout(updateCard, 300); // 等待翻轉動畫結束再更新文字
-                    } else {
-                        updateCard();
-                    }
+                    resetFlipAndUpdate();
                 });
             });
+        }
+
+        // 產生單字面 HTML
+        function getWordHtml(word) {
+            return `<p class="word-title">${word.word}</p>`;
+        }
+
+        // 產生定義面 HTML
+        function getDefHtml(word) {
+            return `
+                <span class="pos-badge">${word.pos}</span>
+                <p class="definition-text">${word.def}</p>
+            `;
         }
 
         // 更新卡片內容
         function updateCard() {
             if (currentData.length === 0) {
-                wordDisplay.textContent = "No Words Found";
-                posDisplay.textContent = "-";
-                defDisplay.textContent = "Please select another week.";
+                cardFront.innerHTML = `<p class="word-title">No Words Found</p>`;
+                cardBack.innerHTML = `<p class="definition-text">Please select another week.</p>`;
                 progressDisplay.textContent = "0 / 0";
                 return;
             }
 
             const currentWord = currentData[currentIndex];
-            wordDisplay.textContent = currentWord.word;
-            posDisplay.textContent = currentWord.pos;
-            defDisplay.textContent = currentWord.def;
+            
+            // 根據是否啟用「反面在先」來決定內容擺放位置
+            if (isReverseMode) {
+                cardFront.innerHTML = getDefHtml(currentWord);
+                cardBack.innerHTML = getWordHtml(currentWord);
+            } else {
+                cardFront.innerHTML = getWordHtml(currentWord);
+                cardBack.innerHTML = getDefHtml(currentWord);
+            }
             
             progressDisplay.textContent = `${currentIndex + 1} / ${currentData.length}`;
             
@@ -455,6 +495,35 @@
             if (currentData.length > 0) {
                 flashcard.classList.toggle('flipped');
             }
+        }
+
+        // 隨機打亂 (Shuffle)
+        function shuffleCards() {
+            // 使用 Fisher-Yates 洗牌演算法打亂陣列
+            for (let i = currentData.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [currentData[i], currentData[j]] = [currentData[j], currentData[i]];
+            }
+            currentIndex = 0;
+            resetFlipAndUpdate();
+        }
+
+        // 切換正反面模式 (Reverse Mode)
+        function toggleReverseMode() {
+            isReverseMode = !isReverseMode;
+            
+            // 更新按鈕文字與樣式
+            if (isReverseMode) {
+                reverseBtn.textContent = "🔄 看單字猜定義 (Word First)";
+                reverseBtn.style.backgroundColor = "var(--accent-color)";
+                reverseBtn.style.color = "white";
+            } else {
+                reverseBtn.textContent = "🔄 看定義猜單字 (Definition First)";
+                reverseBtn.style.backgroundColor = "transparent";
+                reverseBtn.style.color = "var(--accent-color)";
+            }
+            
+            resetFlipAndUpdate();
         }
 
         // 上一張
@@ -473,11 +542,11 @@
             }
         }
 
-        // 確保切換單字時卡片回到正面
+        // 確保切換單字時卡片回到初始面
         function resetFlipAndUpdate() {
             if (flashcard.classList.contains('flipped')) {
                 flashcard.classList.remove('flipped');
-                setTimeout(updateCard, 300); // 等待動畫完成再換字
+                setTimeout(updateCard, 300); // 等待翻轉動畫完成再換字
             } else {
                 updateCard();
             }
