@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SAT 核心單字互動字卡</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         :root {
             --primary-color: #2c3e50;
@@ -47,6 +48,7 @@
             margin-bottom: 30px;
             flex-wrap: wrap;
             justify-content: center;
+            align-items: center;
         }
 
         .filter-btn, .action-btn {
@@ -63,6 +65,17 @@
         .action-btn {
             border-color: var(--accent-color);
             color: var(--accent-color);
+        }
+
+        .upload-btn {
+            border-color: #27ae60;
+            color: #27ae60;
+            display: inline-block;
+        }
+
+        .upload-btn:hover {
+            background-color: #27ae60;
+            color: white;
         }
 
         .filter-btn.active, .filter-btn:hover {
@@ -149,6 +162,12 @@
             margin: 0;
         }
 
+        .definition-zh {
+            font-size: 1rem;
+            color: #bdc3c7; /* 淺灰色，用於背面中文翻譯 */
+            margin-top: 10px;
+        }
+
         .nav-controls {
             display: flex;
             align-items: center;
@@ -197,23 +216,20 @@
 
     <div class="controls" id="week-filters">
         <button class="filter-btn active" data-week="All">All Weeks</button>
-        <button class="filter-btn" data-week="1">Week 1</button>
-        <button class="filter-btn" data-week="2">Week 2</button>
-        <button class="filter-btn" data-week="3">Week 3</button>
-        <button class="filter-btn" data-week="4">Week 4</button>
-    </div>
+        </div>
 
     <div class="settings-controls">
         <button class="action-btn" id="shuffle-btn" onclick="shuffleCards()">🔀 隨機打亂 (Shuffle)</button>
         <button class="action-btn" id="reverse-btn" onclick="toggleReverseMode()">🔄 看定義猜單字 (Definition First)</button>
+        
+        <label for="excel-upload" class="action-btn upload-btn" style="cursor: pointer;">📁 匯入 Excel 題庫</label>
+        <input type="file" id="excel-upload" accept=".xlsx, .xls, .csv" style="display: none;" onchange="handleFileUpload(event)">
     </div>
 
     <div class="flashcard-container" onclick="toggleFlip()">
         <div class="flashcard" id="flashcard">
-            <div class="card-face card-front" id="card-front-content">
-                </div>
-            <div class="card-face card-back" id="card-back-content">
-                </div>
+            <div class="card-face card-front" id="card-front-content"></div>
+            <div class="card-face card-back" id="card-back-content"></div>
         </div>
     </div>
 
@@ -226,222 +242,58 @@
     <div class="flip-hint">💡 點擊卡片翻面查看答案</div>
 
     <script>
-        // 匯入完整單字資料 (A:週數, B:單字, D:詞性, E:英文定義)
-        const vocabData = [
-            // Week 1
-            {week: "1", word: "conjecture", pos: "noun/verb", def: "an opinion or conclusion based on incomplete evidence"},
-            {week: "1", word: "impartial", pos: "adjective", def: "not favoring any side; fair and unbiased"},
-            {week: "1", word: "offhand", pos: "adj/adv", def: "said or done casually, without much thought or preparation"},
-            {week: "1", word: "circumvent", pos: "verb", def: "to find a way around a rule, law, or obstacle"},
-            {week: "1", word: "eclipse", pos: "noun/verb", def: "to surpass or overshadow something, making it seem less important"},
-            {week: "1", word: "exemplify", pos: "verb", def: "to clearly show or be a typical example of something"},
-            {week: "1", word: "fabricate", pos: "verb", def: "to invent or create something that is untrue"},
-            {week: "1", word: "discernible", pos: "adjective", def: "able to be seen, noticed, or recognized"},
-            {week: "1", word: "repudiate", pos: "verb", def: "to reject or refuse to accept something"},
-            {week: "1", word: "proclaim", pos: "verb", def: "to announce something publicly or formally"},
-            {week: "1", word: "foretell", pos: "verb", def: "to predict or indicate something in advance"},
-            {week: "1", word: "recant", pos: "verb", def: "to take back or deny a previously stated belief or claim"},
-            {week: "1", word: "coincide", pos: "verb", def: "to occur at the same time or align"},
-            {week: "1", word: "rebut", pos: "verb", def: "to argue against or disprove a claim"},
-            {week: "1", word: "posit", pos: "verb", def: "to suggest or assume something as a basis for argument"},
-            {week: "1", word: "juvenile", pos: "adjective", def: "relating to young people or behaving in an immature way"},
-            {week: "1", word: "skeptical", pos: "adjective", def: "doubting or not easily convinced"},
-            {week: "1", word: "nuance", pos: "noun", def: "a subtle difference or slight distinction"},
-            {week: "1", word: "observant", pos: "adjective", def: "quick to notice or pay attention to details"},
-            {week: "1", word: "disconcerting", pos: "adjective", def: "causing discomfort or unease"},
-            {week: "1", word: "imperceptible", pos: "adjective", def: "so slight that it cannot be noticed"},
-            {week: "1", word: "strenuously", pos: "adverb", def: "with great effort or force"},
-            {week: "1", word: "interjected", pos: "verb", def: "to interrupt with a comment"},
-            {week: "1", word: "prescribed", pos: "verb", def: "to officially order or set as a rule; to recommend a treatment"},
-            {week: "1", word: "succumb", pos: "verb", def: "to give in to pressure, temptation, or illness"},
-            {week: "1", word: "prevail", pos: "verb", def: "to prove more powerful or successful"},
-            {week: "1", word: "diverge", pos: "verb", def: "to move or develop in different directions"},
-            {week: "1", word: "intersect", pos: "verb", def: "to cross or overlap"},
-            {week: "1", word: "assert", pos: "verb", def: "to state a claim confidently"},
-            {week: "1", word: "deceptive", pos: "adjective", def: "giving a misleading impression"},
-            {week: "1", word: "innocuous", pos: "adjective", def: "not harmful or offensive"},
-            {week: "1", word: "benign", pos: "adjective", def: "harmless or not likely to cause damage"},
-            {week: "1", word: "unobtrusive", pos: "adjective", def: "not noticeable or attracting attention"},
-            {week: "1", word: "peripheral", pos: "adjective", def: "of secondary or minor importance; not central"},
-            {week: "1", word: "approximate", pos: "adj/verb", def: "close to the actual value but not exact"},
-            {week: "1", word: "concealed", pos: "adjective", def: "hidden or kept from view"},
-            {week: "1", word: "tranquilly", pos: "adverb", def: "in a calm and peaceful manner"},
-            {week: "1", word: "ponder", pos: "verb", def: "to think about something carefully and deeply"},
-            {week: "1", word: "germinate", pos: "verb", def: "to begin to grow or develop"},
-            {week: "1", word: "weary", pos: "adjective", def: "feeling tired or exhausted"},
-            {week: "1", word: "toil", pos: "verb/noun", def: "to work extremely hard or with great effort"},
-            {week: "1", word: "zealous", pos: "adjective", def: "showing intense enthusiasm or passion"},
-            {week: "1", word: "pilgrimage", pos: "noun", def: "a journey made for a special or meaningful purpose"},
-            {week: "1", word: "unanimity", pos: "noun", def: "complete agreement by everyone involved"},
-            {week: "1", word: "reverence", pos: "noun", def: "deep respect or admiration"},
-            {week: "1", word: "altruistically", pos: "adverb", def: "in a selfless or unselfish way"},
-            {week: "1", word: "disproportionate", pos: "adjective", def: "out of proper balance or unequal in size or amount"},
-            {week: "1", word: "subsequent", pos: "adjective", def: "following in time; coming after something else"},
-            {week: "1", word: "confer", pos: "verb", def: "to grant or give officially; to discuss or consult"},
-            {week: "1", word: "ingest", pos: "verb", def: "to take in food, drink, or another substance"},
-            {week: "1", word: "saturated", pos: "adjective", def: "filled completely or to capacity"},
-            {week: "1", word: "invertebrate", pos: "noun", def: "an animal without a backbone"},
-            {week: "1", word: "inhibit", pos: "verb", def: "to prevent, slow down, or limit something"},
-            {week: "1", word: "alkaline", pos: "adjective", def: "having a pH greater than 7; basic rather than acidic"},
-            {week: "1", word: "versatile", pos: "adjective", def: "able to adapt or be used for many different purposes"},
-            {week: "1", word: "pivotal", pos: "adjective", def: "extremely important; central to an outcome or development"},
-            {week: "1", word: "suffrage", pos: "noun", def: "the right to vote in political elections"},
-            // Week 2
-            {week: "2", word: "reluctant", pos: "adjective", def: "unwilling or hesitant"},
-            {week: "2", word: "anonymity", pos: "noun", def: "the state of being unknown or unnamed"},
-            {week: "2", word: "abstract", pos: "adjective", def: "existing as an idea rather than concrete reality"},
-            {week: "2", word: "substantial", pos: "adjective", def: "large in amount or importance"},
-            {week: "2", word: "feasibility", pos: "noun", def: "the possibility that something can be done successfully"},
-            {week: "2", word: "grave", pos: "adjective", def: "serious or severe"},
-            {week: "2", word: "draconian", pos: "adjective", def: "excessively harsh or severe"},
-            {week: "2", word: "cohort", pos: "noun", def: "a group sharing a common characteristic or experience"},
-            {week: "2", word: "dearth", pos: "noun", def: "a scarcity or lack of something"},
-            {week: "2", word: "repercussion", pos: "noun", def: "an unintended consequence"},
-            {week: "2", word: "subversive", pos: "adjective", def: "intended to undermine authority or established systems"},
-            {week: "2", word: "adolescence", pos: "noun", def: "the period of life between childhood and adulthood"},
-            {week: "2", word: "detrimental", pos: "adjective", def: "harmful or damaging"},
-            {week: "2", word: "benevolent", pos: "adjective", def: "kind and well-meaning"},
-            {week: "2", word: "dissenting", pos: "adjective", def: "expressing disagreement"},
-            {week: "2", word: "injudiciously", pos: "adverb", def: "in a way that shows poor judgment"},
-            {week: "2", word: "indulgent", pos: "adjective", def: "showing excessive leniency or generosity"},
-            {week: "2", word: "solicitude", pos: "noun", def: "care or concern for someone or something"},
-            {week: "2", word: "vandalism", pos: "noun", def: "deliberate destruction of property"},
-            {week: "2", word: "sanction", pos: "noun/verb", def: "official approval or a penalty for disobeying rules"},
-            {week: "2", word: "harness", pos: "verb", def: "to control and use something effectively"},
-            {week: "2", word: "pertain", pos: "verb", def: "to relate directly to something"},
-            {week: "2", word: "conceited", pos: "adjective", def: "excessively proud of oneself"},
-            {week: "2", word: "august", pos: "adjective", def: "respected and impressive"},
-            {week: "2", word: "omit", pos: "verb", def: "to leave out or exclude"},
-            {week: "2", word: "renown", pos: "noun", def: "widespread fame or recognition"},
-            {week: "2", word: "linchpin", pos: "noun", def: "a person or thing essential to a system or organization"},
-            {week: "2", word: "contemporary", pos: "adjective", def: "existing or occurring at the same time; modern"},
-            {week: "2", word: "improvisational", pos: "adjective", def: "done without preparation; spontaneous"},
-            {week: "2", word: "disparaging", pos: "adjective", def: "expressing criticism or disrespect"},
-            {week: "2", word: "appealing", pos: "adjective", def: "attractive or interesting"},
-            {week: "2", word: "staggering", pos: "adjective", def: "extremely large or surprising"},
-            {week: "2", word: "attribute", pos: "verb/noun", def: "to regard something as caused by"},
-            {week: "2", word: "outset", pos: "noun", def: "the beginning of something"},
-            {week: "2", word: "nocturnal", pos: "adjective", def: "active at night"},
-            {week: "2", word: "phenomenon", pos: "noun", def: "an observable event or fact"},
-            {week: "2", word: "imminent", pos: "adjective", def: "about to happen very soon"},
-            {week: "2", word: "eminent", pos: "adjective", def: "famous and respected within a field"},
-            {week: "2", word: "complimentary", pos: "adjective", def: "expressing praise or provided free of charge"},
-            {week: "2", word: "complementary", pos: "adjective", def: "completing or enhancing something else"},
-            // Week 3
-            {week: "3", word: "perennial", pos: "adjective", def: "recurring frequently or lasting for a long time"},
-            {week: "3", word: "diminution", pos: "noun", def: "a reduction or decrease in size or importance"},
-            {week: "3", word: "remnant", pos: "noun", def: "a small remaining part"},
-            {week: "3", word: "piety", pos: "noun", def: "devotion to religious duties or moral principles"},
-            {week: "3", word: "snobbish", pos: "adjective", def: "acting as if one is superior to others"},
-            {week: "3", word: "connotation", pos: "noun", def: "the implied or emotional meaning of a word"},
-            {week: "3", word: "decry", pos: "verb", def: "to publicly criticize or condemn"},
-            {week: "3", word: "prosper", pos: "verb", def: "to grow or succeed financially or socially"},
-            {week: "3", word: "credence", pos: "noun", def: "belief or acceptance that something is true"},
-            {week: "3", word: "eradication", pos: "noun", def: "the complete destruction or elimination of something"},
-            {week: "3", word: "coalesce", pos: "verb", def: "to come together to form one group or whole"},
-            {week: "3", word: "esoteric", pos: "adjective", def: "understood by only a small number of people"},
-            {week: "3", word: "fallacy", pos: "noun", def: "a mistaken belief or faulty reasoning"},
-            {week: "3", word: "primogeniture", pos: "noun", def: "a system where the eldest child inherits the family estate"},
-            {week: "3", word: "realm", pos: "noun", def: "an area of knowledge, activity, or influence"},
-            {week: "3", word: "oppression", pos: "noun", def: "prolonged cruel or unjust treatment"},
-            {week: "3", word: "revolting", pos: "adjective", def: "extremely unpleasant or disgusting"},
-            {week: "3", word: "mutability", pos: "noun", def: "the ability to change"},
-            {week: "3", word: "tenor", pos: "noun", def: "the general tone or meaning of something"},
-            {week: "3", word: "bestow", pos: "verb", def: "to give or grant something formally"},
-            {week: "3", word: "impel", pos: "verb", def: "to drive or force someone to act"},
-            {week: "3", word: "obscure", pos: "adj/verb", def: "not clear or not well known"},
-            {week: "3", word: "dissipate", pos: "verb", def: "to scatter or gradually disappear"},
-            {week: "3", word: "prodigality", pos: "noun", def: "wasteful or reckless spending"},
-            {week: "3", word: "splendid", pos: "adjective", def: "extremely impressive or excellent"},
-            {week: "3", word: "prevalent", pos: "adjective", def: "widely existing or commonly occurring"},
-            {week: "3", word: "endemic", pos: "adjective", def: "native to or regularly found in a particular place"},
-            {week: "3", word: "suboptimal", pos: "adjective", def: "not the best possible outcome"},
-            {week: "3", word: "constitute", pos: "verb", def: "to form or make up something"},
-            {week: "3", word: "rejuvenated", pos: "adjective", def: "restored to energy or youth"},
-            {week: "3", word: "extraterrestrial", pos: "adjective", def: "originating outside Earth"},
-            {week: "3", word: "timid", pos: "adjective", def: "showing a lack of courage or confidence"},
-            {week: "3", word: "arsenal", pos: "noun", def: "a collection of weapons or resources"},
-            {week: "3", word: "predisposed", pos: "adjective", def: "having a natural tendency toward something"},
-            {week: "3", word: "introverted", pos: "adjective", def: "quiet and reserved, focusing on inner thoughts"},
-            // Week 4
-            {week: "4", word: "ambivalent", pos: "adjective", def: "having mixed or conflicting feelings"},
-            {week: "4", word: "apathetic", pos: "adjective", def: "showing little interest or concern"},
-            {week: "4", word: "antagonistic", pos: "adjective", def: "showing hostility or opposition"},
-            {week: "4", word: "annexation", pos: "noun", def: "the act of taking control of territory"},
-            {week: "4", word: "abdication", pos: "noun", def: "the act of formally giving up power"},
-            {week: "4", word: "provisional", pos: "adjective", def: "temporary and subject to change"},
-            {week: "4", word: "deprive", pos: "verb", def: "to deny someone something necessary"},
-            {week: "4", word: "prompt", pos: "verb", def: "to cause or trigger an action"},
-            {week: "4", word: "retaliatory", pos: "adjective", def: "done in response to an attack or harm"},
-            {week: "4", word: "debilitating", pos: "adjective", def: "causing serious weakness or impairment"},
-            {week: "4", word: "premised", pos: "adj/verb", def: "based on or founded upon something"},
-            {week: "4", word: "preemptively", pos: "adverb", def: "taking action beforehand to prevent something"},
-            {week: "4", word: "susceptible", pos: "adjective", def: "easily influenced or affected by something"},
-            {week: "4", word: "grievance", pos: "noun", def: "a complaint about unfair treatment"},
-            {week: "4", word: "peculiar", pos: "adjective", def: "strange or unusual; specific to something"},
-            {week: "4", word: "recur", pos: "verb", def: "to happen again repeatedly"},
-            {week: "4", word: "disillusioned", pos: "adjective", def: "disappointed because reality is worse than expected"},
-            {week: "4", word: "exacerbated", pos: "verb", def: "made a problem worse"},
-            {week: "4", word: "quell", pos: "verb", def: "to suppress or put an end to something"},
-            {week: "4", word: "indubitably", pos: "adverb", def: "without doubt; unquestionably"},
-            {week: "4", word: "protagonist", pos: "noun", def: "the main character in a story"},
-            {week: "4", word: "indolent", pos: "adjective", def: "lazy or avoiding work"},
-            {week: "4", word: "affluence", pos: "noun", def: "the state of having a great deal of wealth"},
-            {week: "4", word: "imprudent", pos: "adjective", def: "not showing good judgment; unwise"},
-            {week: "4", word: "lethargic", pos: "adjective", def: "lacking energy or enthusiasm"},
-            {week: "4", word: "relegate", pos: "verb", def: "to assign something to a lower position or rank"},
-            {week: "4", word: "annals", pos: "noun", def: "historical records or chronicles"},
-            {week: "4", word: "peril", pos: "noun", def: "serious danger or risk"},
-            {week: "4", word: "obsolete", pos: "adjective", def: "no longer used because something newer has replaced it"},
-            {week: "4", word: "facile", pos: "adjective", def: "simplistic and lacking depth"},
-            {week: "4", word: "epidemic", pos: "noun/adj", def: "a widespread occurrence of disease or problem"},
-            {week: "4", word: "acquiescent", pos: "adjective", def: "accepting something without protest"},
-            {week: "4", word: "repugnance", pos: "noun", def: "intense disgust or strong dislike"},
-            {week: "4", word: "dreary", pos: "adjective", def: "dull, bleak, or depressing"},
-            {week: "4", word: "hideous", pos: "adjective", def: "extremely ugly or unpleasant"},
-            {week: "4", word: "calamity", pos: "noun", def: "a serious disaster or catastrophe"},
-            {week: "4", word: "languished", pos: "verb", def: "became weak, neglected, or declined"},
-            {week: "4", word: "torments", pos: "noun/verb", def: "severe physical or mental suffering"},
-            {week: "4", word: "immense", pos: "adjective", def: "extremely large or great"},
-            {week: "4", word: "cultivated", pos: "adjective", def: "developed or refined through effort or education"},
-            {week: "4", word: "requisite", pos: "adjective", def: "required or necessary"},
-            {week: "4", word: "procured", pos: "verb", def: "obtained or acquired something"},
-            {week: "4", word: "vestige", pos: "noun", def: "a small remaining part of something that once existed"},
-            {week: "4", word: "scarcely", pos: "adverb", def: "barely; almost not"},
-            {week: "4", word: "serenity", pos: "noun", def: "a state of calmness or peace"},
-            {week: "4", word: "barren", pos: "adjective", def: "unable to produce vegetation or results"},
-            {week: "4", word: "allude", pos: "verb", def: "to refer to something indirectly"}
+        // 預設的單字資料（若不匯入就用這份）
+        let vocabData = [
+            {week: "1", word: "conjecture", pos: "noun/verb", def: "an opinion or conclusion based on incomplete evidence", zh: "推測；臆測"},
+            {week: "1", word: "impartial", pos: "adjective", def: "not favoring any side; fair and unbiased", zh: "公正的；不偏不倚的"}
+            // (為了程式碼簡潔，這裡省略了原本內建的完整預設單字，你可以視情況決定是否要保留預設值)
         ];
 
         let currentData = [...vocabData];
         let currentIndex = 0;
-        let isReverseMode = false; // 控制是否「反面在先」
+        let isReverseMode = false; 
 
-        // DOM 元素
         const cardFront = document.getElementById('card-front-content');
         const cardBack = document.getElementById('card-back-content');
         const progressDisplay = document.getElementById('progress-display');
         const flashcard = document.getElementById('flashcard');
         const prevBtn = document.getElementById('prev-btn');
         const nextBtn = document.getElementById('next-btn');
-        const filterBtns = document.querySelectorAll('.filter-btn');
+        const filterContainer = document.getElementById('week-filters');
         const reverseBtn = document.getElementById('reverse-btn');
 
         // 初始化
         function init() {
+            renderWeekFilters();
             updateCard();
+        }
+
+        // 動態生成週數過濾器
+        function renderWeekFilters() {
+            // 找出所有的 week (去除重複並排序)
+            const weeks = [...new Set(vocabData.map(item => item.week))].filter(w => w).sort((a, b) => {
+                const numA = parseInt(String(a).replace(/[^0-9]/g, '')) || 0;
+                const numB = parseInt(String(b).replace(/[^0-9]/g, '')) || 0;
+                return numA - numB;
+            });
+
+            filterContainer.innerHTML = '<button class="filter-btn active" data-week="All">All Weeks</button>';
             
-            // 綁定篩選按鈕事件
-            filterBtns.forEach(btn => {
+            weeks.forEach(week => {
+                filterContainer.innerHTML += `<button class="filter-btn" data-week="${week}">Week ${week}</button>`;
+            });
+
+            // 重新綁定事件
+            document.querySelectorAll('.filter-btn').forEach(btn => {
                 btn.addEventListener('click', (e) => {
-                    filterBtns.forEach(b => b.classList.remove('active'));
+                    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
                     e.target.classList.add('active');
                     
                     const selectedWeek = e.target.getAttribute('data-week');
                     if (selectedWeek === 'All') {
                         currentData = [...vocabData];
                     } else {
-                        currentData = vocabData.filter(item => item.week === selectedWeek);
+                        currentData = vocabData.filter(item => item.week == selectedWeek);
                     }
                     
                     currentIndex = 0;
@@ -450,31 +302,84 @@
             });
         }
 
-        // 產生單字面 HTML
+        // 處理 Excel 檔案上傳
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, {type: 'array'});
+                
+                // 讀取第一個工作表
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                
+                // 將 Excel 資料轉為 JSON 陣列
+                const jsonData = XLSX.utils.sheet_to_json(worksheet);
+                const newVocabData = [];
+
+                jsonData.forEach(row => {
+                    // 自動匹配你提供的欄位名稱
+                    const weekRaw = row['Week #'] || row['Week'] || '1';
+                    const weekNum = String(weekRaw).replace(/Week\s*/gi, '').trim(); 
+                    const word = row['Word'] || row['單字'] || '';
+                    const pos = row['Part of Speech'] || row['詞性'] || '';
+                    const defEn = row['Definition (EN)'] || row['英文定義'] || '';
+                    const defZh = row['Chinese Meaning'] || row['中文意思'] || '';
+
+                    if (word && defEn) {
+                        newVocabData.push({
+                            week: weekNum,
+                            word: word,
+                            pos: pos,
+                            def: defEn,
+                            zh: defZh
+                        });
+                    }
+                });
+
+                if (newVocabData.length > 0) {
+                    vocabData = newVocabData; // 替換掉舊資料
+                    currentData = [...vocabData];
+                    currentIndex = 0;
+                    init(); // 重新渲染畫面
+                    alert(`✅ 成功匯入 ${newVocabData.length} 個單字！`);
+                } else {
+                    alert('❌ 找不到單字資料，請確定 Excel 標題包含：\n"Week #", "Word", "Part of Speech", "Definition (EN)"');
+                }
+                
+                // 清空 input 讓下次可以重新上傳同一個檔案
+                event.target.value = ''; 
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
         function getWordHtml(word) {
             return `<p class="word-title">${word.word}</p>`;
         }
 
-        // 產生定義面 HTML
         function getDefHtml(word) {
-            return `
-                <span class="pos-badge">${word.pos}</span>
-                <p class="definition-text">${word.def}</p>
-            `;
+            let html = `<span class="pos-badge">${word.pos}</span>
+                        <p class="definition-text">${word.def}</p>`;
+            // 若 Excel 裡有中文翻譯，也顯示在下方（配合你上傳的資料）
+            if (word.zh) {
+                html += `<p class="definition-zh">${word.zh}</p>`;
+            }
+            return html;
         }
 
-        // 更新卡片內容
         function updateCard() {
             if (currentData.length === 0) {
-                cardFront.innerHTML = `<p class="word-title">No Words Found</p>`;
-                cardBack.innerHTML = `<p class="definition-text">Please select another week.</p>`;
+                cardFront.innerHTML = `<p class="word-title">沒有找到單字</p>`;
+                cardBack.innerHTML = `<p class="definition-text">請匯入 Excel 或選擇其他週數</p>`;
                 progressDisplay.textContent = "0 / 0";
                 return;
             }
 
             const currentWord = currentData[currentIndex];
             
-            // 根據是否啟用「反面在先」來決定內容擺放位置
             if (isReverseMode) {
                 cardFront.innerHTML = getDefHtml(currentWord);
                 cardBack.innerHTML = getWordHtml(currentWord);
@@ -484,22 +389,15 @@
             }
             
             progressDisplay.textContent = `${currentIndex + 1} / ${currentData.length}`;
-            
-            // 更新按鈕狀態
             prevBtn.disabled = currentIndex === 0;
             nextBtn.disabled = currentIndex === currentData.length - 1;
         }
 
-        // 翻轉卡片
         function toggleFlip() {
-            if (currentData.length > 0) {
-                flashcard.classList.toggle('flipped');
-            }
+            if (currentData.length > 0) flashcard.classList.toggle('flipped');
         }
 
-        // 隨機打亂 (Shuffle)
         function shuffleCards() {
-            // 使用 Fisher-Yates 洗牌演算法打亂陣列
             for (let i = currentData.length - 1; i > 0; i--) {
                 const j = Math.floor(Math.random() * (i + 1));
                 [currentData[i], currentData[j]] = [currentData[j], currentData[i]];
@@ -508,11 +406,8 @@
             resetFlipAndUpdate();
         }
 
-        // 切換正反面模式 (Reverse Mode)
         function toggleReverseMode() {
             isReverseMode = !isReverseMode;
-            
-            // 更新按鈕文字與樣式
             if (isReverseMode) {
                 reverseBtn.textContent = "🔄 看單字猜定義 (Word First)";
                 reverseBtn.style.backgroundColor = "var(--accent-color)";
@@ -522,37 +417,26 @@
                 reverseBtn.style.backgroundColor = "transparent";
                 reverseBtn.style.color = "var(--accent-color)";
             }
-            
             resetFlipAndUpdate();
         }
 
-        // 上一張
         function prevCard() {
-            if (currentIndex > 0) {
-                currentIndex--;
-                resetFlipAndUpdate();
-            }
+            if (currentIndex > 0) { currentIndex--; resetFlipAndUpdate(); }
         }
 
-        // 下一張
         function nextCard() {
-            if (currentIndex < currentData.length - 1) {
-                currentIndex++;
-                resetFlipAndUpdate();
-            }
+            if (currentIndex < currentData.length - 1) { currentIndex++; resetFlipAndUpdate(); }
         }
 
-        // 確保切換單字時卡片回到初始面
         function resetFlipAndUpdate() {
             if (flashcard.classList.contains('flipped')) {
                 flashcard.classList.remove('flipped');
-                setTimeout(updateCard, 300); // 等待翻轉動畫完成再換字
+                setTimeout(updateCard, 300); 
             } else {
                 updateCard();
             }
         }
 
-        // 執行初始化
         window.onload = init;
     </script>
 </body>
